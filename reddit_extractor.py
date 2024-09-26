@@ -10,7 +10,7 @@ producer = Producer(conf)
 
 # Set para almacenar los IDs de los posts y comentarios capturados (no permite duplicados)
 captured_posts_ids = set()
-processed_comments_ids = set()  # Para almacenar los comentarios ya procesados
+processed_comments = {}  # Diccionario para almacenar comentarios por ID
 
 # Función para enviar los comentarios a Kafka
 def send_to_kafka(topic, data):
@@ -30,18 +30,22 @@ def listen_to_comments_for_all_posts():
             submission = reddit.submission(id=post_id)
             submission.comments.replace_more(limit=None)  # Cargar todos los comentarios
             for comment in submission.comments.list():
-                if comment.id not in processed_comments_ids:  # Revisar si ya fue procesado
+                # Revisar si el comentario ya existe y si ha cambiado
+                if (comment.id not in processed_comments) or (processed_comments[comment.id] != comment.body):
                     comment_data = {
                         'type': 'comment',
                         'post_id': submission.id,
                         'comment_id': comment.id,
                         'comment_body': comment.body.strip() if comment.body else 'sin texto',
                         'comment_author': str(comment.author),
-                        'created': comment.created_utc
+                        'created': comment.created_utc,
+                        'edited': comment.edited
                     }
                     send_to_kafka('reddit_data', comment_data)
                     print(f"Comentario enviado: {comment.body}")
-                    processed_comments_ids.add(comment.id)  # Agregar el comentario procesado al set
+
+                    # Actualizar el diccionario de comentarios procesados
+                    processed_comments[comment.id] = comment.body
         time.sleep(5)  # Pausa para revisar los comentarios de los posts de forma periódica
 
 # Función para capturar nuevas publicaciones y agregar sus IDs al set
@@ -60,7 +64,7 @@ def get_reddit_data(subreddit_name):
             # Procesar el post
             post_data = {
                 'type': 'post',
-                'post_id': submission.id,  # Asegúrate de enviar el post_id
+                'post_id': submission.id,
                 'title': submission.title.strip(),
                 'author': str(submission.author),
                 'url': submission.url,
