@@ -60,6 +60,7 @@ def get_reddit_data(subreddit_name):
             # Procesar el post
             post_data = {
                 'type': 'post',
+                'post_id': submission.id,  # Asegúrate de enviar el post_id
                 'title': submission.title.strip(),
                 'author': str(submission.author),
                 'url': submission.url,
