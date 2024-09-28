@@ -1,5 +1,8 @@
 # Ignore all content in the reddit/data directory
 reddit/data/
+
+youtube/data/*.json
+reddit/data/*.json
 # Ignorar todos los archivos .env en el proyecto
 *.env
 
