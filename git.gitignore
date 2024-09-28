@@ -1,2 +1,10 @@
 # Ignore all content in the reddit/data directory
 reddit/data/
+# Ignorar todos los archivos .env en el proyecto
+*.env
+
+# Ignorar archivos .env en la carpeta Reddit
+reddit/*.env
+
+# Ignorar archivos .env en la carpeta Youtube
+youtube/*.env

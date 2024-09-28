@@ -2,10 +2,15 @@ import time
 import threading
 import praw
 import json
+import os
+from dotenv import load_dotenv
 from confluent_kafka import Producer
 
-# Configuración del productor de Kafka
-conf = {'bootstrap.servers': 'localhost:9092'}
+# Cargar las variables de entorno desde el archivo .env
+load_dotenv('reddit.env')
+
+# Configuración del productor de Kafka usando las variables de entorno
+conf = {'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS')}
 producer = Producer(conf)
 
 # Set para almacenar los IDs de los posts y comentarios capturados (no permite duplicados)
@@ -20,9 +25,9 @@ def send_to_kafka(topic, data):
 # Función para capturar comentarios de todos los posts en la lista
 def listen_to_comments_for_all_posts():
     reddit = praw.Reddit(
-        client_id='Tbn0oC6kfayGMfgKjUvXbw',
-        client_secret='pOrII9VcFP6G4ZvEm5SjF46EGFmH2Q',
-        user_agent='INDA/v0.1'
+        client_id=os.getenv('REDDIT_CLIENT_ID'),
+        client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
+        user_agent=os.getenv('REDDIT_USER_AGENT')
     )
 
     while True:
@@ -51,9 +56,9 @@ def listen_to_comments_for_all_posts():
 # Función para capturar nuevas publicaciones y agregar sus IDs al set
 def get_reddit_data(subreddit_name):
     reddit = praw.Reddit(
-        client_id='Tbn0oC6kfayGMfgKjUvXbw',
-        client_secret='pOrII9VcFP6G4ZvEm5SjF46EGFmH2Q',
-        user_agent='INDA/v0.1'
+        client_id=os.getenv('REDDIT_CLIENT_ID'),
+        client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
+        user_agent=os.getenv('REDDIT_USER_AGENT')
     )
     subreddit = reddit.subreddit(subreddit_name)
 
@@ -93,6 +98,7 @@ def obtener_subreddits():
 
 # Función principal
 if __name__ == "__main__":
+
     # Crear hilo para capturar los comentarios de todos los posts almacenados
     comment_thread = threading.Thread(target=listen_to_comments_for_all_posts)
     comment_thread.start()
