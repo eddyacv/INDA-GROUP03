@@ -4,6 +4,7 @@ import time
 from googleapiclient.discovery import build
 from confluent_kafka import Producer
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Cargar las variables de entorno desde youtube.env
 load_dotenv('youtube.env')
@@ -18,7 +19,7 @@ youtube = build('youtube', 'v3', developerKey=api_key)
 producer = Producer({'bootstrap.servers': 'localhost:9092'})
 
 # Función para buscar los primeros 50 videos relacionados con una palabra clave
-def buscar_videos_palabra_clave(palabra_clave, max_results=5):
+def buscar_videos_palabra_clave(palabra_clave, max_results=10):
     request = youtube.search().list(
         q=palabra_clave,
         part="snippet",
@@ -94,7 +95,12 @@ def ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minut
     intervalo_segundos = intervalo_minutos * 60  # Convertir minutos a segundos
 
     tiempo_inicial = time.time()
+    iteracion = 0  # Contador de iteraciones
+
     while (time.time() - tiempo_inicial) < tiempo_total:
+        iteracion += 1
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # Obtener timestamp actual
+
         # Buscar los primeros 50 videos relacionados con la palabra clave
         videos = buscar_videos_palabra_clave(palabra_clave)
 
@@ -102,14 +108,19 @@ def ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minut
         for video in videos:
             datos_video = obtener_datos_video(video['video_id'])
             if datos_video:
+                # Añadir timestamp y palabra clave al mensaje
+                datos_video['timestamp'] = timestamp
+                datos_video['palabra_clave'] = palabra_clave
+                datos_video['iteracion'] = iteracion
+
                 enviar_a_kafka('youtube-videos', datos_video)
-                print(f"Video enviado: {datos_video['title']}")
+                print(f"Video enviado: {datos_video['title']} | Iteración: {iteracion} | Timestamp: {timestamp}")
 
         # Esperar antes de la siguiente consulta a YouTube
         time.sleep(intervalo_segundos)
 
     # Enviar mensaje de finalización para indicar que se ha completado la búsqueda
-    mensaje_finalizacion = {"status": "finalizado", "mensaje": "Se han enviado todos los videos durante el período"}
+    mensaje_finalizacion = {"status": "finalizado", "mensaje": f"Se han enviado todos los videos durante el período para '{palabra_clave}'", "timestamp": timestamp}
     enviar_a_kafka('youtube-videos', mensaje_finalizacion)
     print("Todos los videos han sido enviados. Mensaje de finalización enviado.")
 
