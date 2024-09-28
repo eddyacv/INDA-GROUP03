@@ -1,1 +1,2 @@
-data/
+# Ignore all content in the reddit/data directory
+reddit/data/
