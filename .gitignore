@@ -11,3 +11,5 @@ reddit/*.env
 
 # Ignorar archivos .env en la carpeta Youtube
 youtube/*.env
+
+redditbyword
