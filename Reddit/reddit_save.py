@@ -96,8 +96,12 @@ finally:
 
     # Añadir los nuevos datos al archivo existente
     for new_post in posts_with_comments:
-        if not any(post['post_id'] == new_post['post_id'] for post in existing_data):
-            existing_data.append(new_post)
+        # Verificar que new_post tenga 'post_id'
+        if 'post_id' in new_post:
+            if not any(post.get('post_id') == new_post['post_id'] for post in existing_data):
+                existing_data.append(new_post)
+        else:
+            print(f"Advertencia: El nuevo post no tiene 'post_id': {new_post}")
 
     # Guardar todos los datos nuevamente en 'reddit.json'
     with open(reddit_json_path, 'w') as reddit_file:

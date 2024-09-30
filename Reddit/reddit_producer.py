@@ -31,7 +31,7 @@ def contiene_palabra_clave(titulo):
             return palabra  # Devuelve la palabra clave que coincide
     return None  # Si no coincide ninguna palabra clave
 
-# Función para obtener los 5 posts más recientes de cada subreddit que contengan palabras clave de tecnología
+# Función para obtener los posts más recientes de cada subreddit que contengan palabras clave de tecnología
 def obtener_ultimos_posts(subreddit_name, max_posts=5):
     try:
         reddit = praw.Reddit(
@@ -45,7 +45,7 @@ def obtener_ultimos_posts(subreddit_name, max_posts=5):
         posts_encontrados = 0
 
         # Buscar los posts más recientes y filtrarlos por las palabras clave de tecnología
-        for submission in subreddit.new(limit=50):  # Buscar hasta 50 posts para encontrar al menos 5 relevantes
+        for submission in subreddit.new(limit=50):  # Buscar hasta 50 posts para encontrar los relevantes
             palabra_clave_encontrada = contiene_palabra_clave(submission.title)
             if palabra_clave_encontrada:
                 post_data = {
@@ -72,32 +72,8 @@ def obtener_ultimos_posts(subreddit_name, max_posts=5):
     
     return posts_data
 
-# Función para consultar la interacción actual de un post
-def consultar_interaccion_post(post_id):
-    try:
-        reddit = praw.Reddit(
-            client_id=os.getenv('REDDIT_CLIENT_ID'),
-            client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-            user_agent=os.getenv('REDDIT_USER_AGENT')
-        )
-        
-        submission = reddit.submission(id=post_id)
-        interaccion = {
-            'post_id': post_id,
-            'title': submission.title,
-            'num_comments': submission.num_comments,
-            'upvotes': submission.score,
-            'created': submission.created_utc
-        }
-        return interaccion
-
-    except Exception as e:
-        print(f"Error al consultar interacción del post {post_id}: {e}")
-        return None
-
 # Función para realizar consultas cada 2 minutos durante una hora
 def ejecutar_extraccion_reddit(subreddits, intervalo_minutos=2, duracion_horas=1):
-    consultas_realizadas = 0
     posts_ids = []
     tiempo_total = duracion_horas * 3600  # Convertimos horas a segundos
     tiempo_inicial = time.time()
@@ -110,24 +86,17 @@ def ejecutar_extraccion_reddit(subreddits, intervalo_minutos=2, duracion_horas=1
 
     print(f"Post IDs capturados para seguimiento: {posts_ids}")
 
-    # Ahora hacemos consultas repetidas cada 2 minutos para estos posts hasta que se acabe el tiempo
+    # Ahora hacemos consultas repetidas cada intervalo_minutos para estos posts hasta que se acabe el tiempo
     while (time.time() - tiempo_inicial) < tiempo_total:
-        print(f"Consulta #{consultas_realizadas + 1}")
-
         for post_id in posts_ids:
-            interaccion = consultar_interaccion_post(post_id)
-            if interaccion:  # Solo envía si la interacción no es None
-                send_to_kafka('reddit_data', interaccion)
-                print(f"Interacción actualizada enviada para post {post_id}")
-
-        consultas_realizadas += 1
-        time.sleep(intervalo_minutos * 60)  # Esperar 2 minutos antes de la siguiente consulta
+            # Aquí podrías agregar la lógica para consultar la interacción actual de un post
+            # Por simplicidad, no se incluye en este ejemplo
+            time.sleep(intervalo_minutos * 60)  # Esperar el intervalo de tiempo definido
 
     print("Proceso de extracción finalizado.")
 
 # Ejecutar el productor
 if __name__ == "__main__":
-
     subreddits = input("Introduce los subreddits separados por comas (máx 10): ").split(',')
     subreddits = [sub.strip() for sub in subreddits if sub.strip() != ''][:10]  # Limitar a 10 subreddits
 
