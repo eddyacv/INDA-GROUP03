@@ -3,6 +3,7 @@ reddit/data/
 
 youtube/data/*.json
 reddit/data/*.json
+devto/data/*.json
 # Ignorar todos los archivos .env en el proyecto
 *.env
 
@@ -13,3 +14,5 @@ reddit/*.env
 youtube/*.env
 
 redditbyword
+
+*.ipynb
