@@ -1,120 +1,134 @@
 import time
-import threading
 import praw
 import json
 import os
 from dotenv import load_dotenv
 from confluent_kafka import Producer
 
-# Cargar las variables de entorno desde el archivo .env
+# Cargar las variables de entorno desde reddit.env
 load_dotenv('reddit.env')
 
-# Configuración del productor de Kafka usando las variables de entorno
+# Configuración del productor de Kafka
 conf = {'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS')}
 producer = Producer(conf)
 
-# Set para almacenar los IDs de los posts y comentarios capturados (no permite duplicados)
-captured_posts_ids = set()
-processed_comments = {}  # Diccionario para almacenar comentarios por ID
+# Lista de palabras clave relacionadas con tecnologías
+palabras_clave_tecnologias = ['AI', 'machine learning', 'big data', 'cloud', 'blockchain', 'data science', 'python', 'javascript', 'devops']
 
-# Función para enviar los comentarios a Kafka
+# Función para enviar los datos a Kafka
 def send_to_kafka(topic, data):
-    producer.produce(topic, value=json.dumps(data))
-    producer.poll(0)
+    try:
+        producer.produce(topic, value=json.dumps(data).encode('utf-8'))
+        producer.flush()
+    except Exception as e:
+        print(f"Error al enviar datos a Kafka: {e}")
 
-# Función para capturar comentarios de todos los posts en la lista
-def listen_to_comments_for_all_posts():
-    reddit = praw.Reddit(
-        client_id=os.getenv('REDDIT_CLIENT_ID'),
-        client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-        user_agent=os.getenv('REDDIT_USER_AGENT')
-    )
+# Función para verificar si el título contiene alguna palabra clave relacionada con tecnología
+def contiene_palabra_clave(titulo):
+    titulo_lower = titulo.lower()
+    for palabra in palabras_clave_tecnologias:
+        if palabra.lower() in titulo_lower:
+            return palabra  # Devuelve la palabra clave que coincide
+    return None  # Si no coincide ninguna palabra clave
 
-    while True:
-        for post_id in list(captured_posts_ids):  # Convertir a lista para iterar de forma segura
-            submission = reddit.submission(id=post_id)
-            submission.comments.replace_more(limit=None)  # Cargar todos los comentarios
-            for comment in submission.comments.list():
-                # Revisar si el comentario ya existe y si ha cambiado
-                if (comment.id not in processed_comments) or (processed_comments[comment.id] != comment.body):
-                    comment_data = {
-                        'type': 'comment',
-                        'post_id': submission.id,
-                        'comment_id': comment.id,
-                        'comment_body': comment.body.strip() if comment.body else 'sin texto',
-                        'comment_author': str(comment.author),
-                        'created': comment.created_utc,
-                        'edited': comment.edited
-                    }
-                    send_to_kafka('reddit_data', comment_data)
-                    print(f"Comentario enviado: {comment.body}")
+# Función para obtener los 5 posts más recientes de cada subreddit que contengan palabras clave de tecnología
+def obtener_ultimos_posts(subreddit_name, max_posts=5):
+    try:
+        reddit = praw.Reddit(
+            client_id=os.getenv('REDDIT_CLIENT_ID'),
+            client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
+            user_agent=os.getenv('REDDIT_USER_AGENT')
+        )
+        
+        subreddit = reddit.subreddit(subreddit_name)
+        posts_data = []
+        posts_encontrados = 0
 
-                    # Actualizar el diccionario de comentarios procesados
-                    processed_comments[comment.id] = comment.body
-        time.sleep(5)  # Pausa para revisar los comentarios de los posts de forma periódica
+        # Buscar los posts más recientes y filtrarlos por las palabras clave de tecnología
+        for submission in subreddit.new(limit=50):  # Buscar hasta 50 posts para encontrar al menos 5 relevantes
+            palabra_clave_encontrada = contiene_palabra_clave(submission.title)
+            if palabra_clave_encontrada:
+                post_data = {
+                    'post_id': submission.id,
+                    'title': submission.title,
+                    'author': str(submission.author),
+                    'created': submission.created_utc,
+                    'num_comments': submission.num_comments,
+                    'upvotes': submission.score,
+                    'url': submission.url,
+                    'subreddit': str(submission.subreddit),
+                    'tendencia': palabra_clave_encontrada  # Palabra clave que coincidió
+                }
+                posts_data.append(post_data)
+                send_to_kafka('reddit_data', post_data)  # Enviar a Kafka
+                print(f"Post enviado: {submission.title} (Palabra clave: {palabra_clave_encontrada})")
+                
+                posts_encontrados += 1
+                if posts_encontrados >= max_posts:
+                    break  # Terminar cuando encontramos el número máximo de posts
 
-# Función para capturar nuevas publicaciones y agregar sus IDs al set
-def get_reddit_data(subreddit_name):
-    reddit = praw.Reddit(
-        client_id=os.getenv('REDDIT_CLIENT_ID'),
-        client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
-        user_agent=os.getenv('REDDIT_USER_AGENT')
-    )
-    subreddit = reddit.subreddit(subreddit_name)
+    except Exception as e:
+        print(f"Error al obtener posts del subreddit {subreddit_name}: {e}")
+    
+    return posts_data
 
-    print(f"Escuchando publicaciones de: {subreddit_name}")
+# Función para consultar la interacción actual de un post
+def consultar_interaccion_post(post_id):
+    try:
+        reddit = praw.Reddit(
+            client_id=os.getenv('REDDIT_CLIENT_ID'),
+            client_secret=os.getenv('REDDIT_CLIENT_SECRET'),
+            user_agent=os.getenv('REDDIT_USER_AGENT')
+        )
+        
+        submission = reddit.submission(id=post_id)
+        interaccion = {
+            'post_id': post_id,
+            'title': submission.title,
+            'num_comments': submission.num_comments,
+            'upvotes': submission.score,
+            'created': submission.created_utc
+        }
+        return interaccion
 
-    for submission in subreddit.stream.submissions(skip_existing=True):
-        if submission.id not in captured_posts_ids:  # Evitar procesar posts duplicados
-            # Procesar el post
-            post_data = {
-                'type': 'post',
-                'post_id': submission.id,
-                'title': submission.title.strip(),
-                'author': str(submission.author),
-                'url': submission.url,
-                'created': submission.created_utc,
-                'subreddit': str(submission.subreddit)
-            }
-            send_to_kafka('reddit_data', post_data)
-            print(f"Post enviado: {submission.title}")
+    except Exception as e:
+        print(f"Error al consultar interacción del post {post_id}: {e}")
+        return None
 
-            # Agregar el post ID al set para capturar comentarios más adelante
-            captured_posts_ids.add(submission.id)
+# Función para realizar consultas cada 2 minutos durante una hora
+def ejecutar_extraccion_reddit(subreddits, intervalo_minutos=2, duracion_horas=1):
+    consultas_realizadas = 0
+    posts_ids = []
+    tiempo_total = duracion_horas * 3600  # Convertimos horas a segundos
+    tiempo_inicial = time.time()
 
-        time.sleep(2)  # Pausa para no saturar la API de Reddit
+    # Primero obtenemos los últimos posts que contengan palabras clave de cada subreddit
+    for subreddit in subreddits:
+        print(f"Consultando el subreddit: {subreddit}")
+        posts = obtener_ultimos_posts(subreddit, max_posts=5)
+        posts_ids.extend([post['post_id'] for post in posts])
 
-# Función para pedir al usuario los subreddits
-def obtener_subreddits():
-    subreddits = input("Introduce los subreddits separados por comas: ").split(',')
-    subreddits = [subreddit.strip() for subreddit in subreddits]  # Eliminar espacios
-    print(f"Has ingresado los siguientes subreddits: {', '.join(subreddits)}")
-    confirmar = input("¿Deseas continuar? (S/N): ").strip().lower()
-    if confirmar == 's':
-        return subreddits
-    else:
-        print("Cancelado por el usuario.")
-        exit()
+    print(f"Post IDs capturados para seguimiento: {posts_ids}")
 
-# Función principal
+    # Ahora hacemos consultas repetidas cada 2 minutos para estos posts hasta que se acabe el tiempo
+    while (time.time() - tiempo_inicial) < tiempo_total:
+        print(f"Consulta #{consultas_realizadas + 1}")
+
+        for post_id in posts_ids:
+            interaccion = consultar_interaccion_post(post_id)
+            if interaccion:  # Solo envía si la interacción no es None
+                send_to_kafka('reddit_data', interaccion)
+                print(f"Interacción actualizada enviada para post {post_id}")
+
+        consultas_realizadas += 1
+        time.sleep(intervalo_minutos * 60)  # Esperar 2 minutos antes de la siguiente consulta
+
+    print("Proceso de extracción finalizado.")
+
+# Ejecutar el productor
 if __name__ == "__main__":
 
-    # Crear hilo para capturar los comentarios de todos los posts almacenados
-    comment_thread = threading.Thread(target=listen_to_comments_for_all_posts)
-    comment_thread.start()
+    subreddits = input("Introduce los subreddits separados por comas (máx 10): ").split(',')
+    subreddits = [sub.strip() for sub in subreddits if sub.strip() != ''][:10]  # Limitar a 10 subreddits
 
-    # Pedir al usuario los subreddits y crear un hilo por cada uno
-    subreddits = obtener_subreddits()
-    threads = []
-
-    for subreddit in subreddits:
-        thread = threading.Thread(target=get_reddit_data, args=(subreddit,))
-        thread.start()
-        threads.append(thread)
-
-    # Esperar a que todos los hilos terminen
-    for thread in threads:
-        thread.join()
-
-    # Asegurarse de que todos los mensajes se han enviado
-    producer.flush()
+    ejecutar_extraccion_reddit(subreddits, intervalo_minutos=2, duracion_horas=1)

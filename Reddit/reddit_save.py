@@ -7,11 +7,6 @@ from dotenv import load_dotenv
 # Cargar las variables de entorno desde reddit.env
 load_dotenv('reddit.env')
 
-# Obtener las credenciales desde las variables de entorno (si las necesitas en algún momento)
-reddit_client_id = os.getenv('REDDIT_CLIENT_ID')
-reddit_client_secret = os.getenv('REDDIT_CLIENT_SECRET')
-reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
-
 # Configuración del consumidor de Kafka
 conf = {
     'bootstrap.servers': 'localhost:9092',
@@ -43,35 +38,33 @@ try:
             continue
 
         # Procesar el mensaje
-        message_value = json.loads(msg.value().decode('utf-8'))
+        try:
+            message_value = json.loads(msg.value().decode('utf-8'))
+        except json.JSONDecodeError as e:
+            print(f"Error decodificando mensaje JSON: {e}")
+            continue
+
         print(f"Mensaje recibido: {message_value}")
 
         # Clasificar entre post y comentarios
-        if message_value.get('type') == 'post':
+        if message_value.get('post_id'):
             post_id = message_value.get('post_id')
             # Crear un diccionario con la estructura del post y comentarios vacíos
             post_data = {
                 'post_id': post_id,
-                'title': message_value['title'],
-                'author': message_value['author'],
-                'created': message_value['created'],
-                'subreddit': message_value['subreddit'],
-                'url': message_value['url'],
+                'title': message_value.get('title', 'N/A'),
+                'author': message_value.get('author', 'N/A'),
+                'created': message_value.get('created', 0),
+                'subreddit': message_value.get('subreddit', 'N/A'),
+                'url': message_value.get('url', 'N/A'),
+                'num_comments': message_value.get('num_comments', 0),
+                'upvotes': message_value.get('upvotes', 0),
+                'tendencia': message_value.get('tendencia', 'null'),
                 'comments': []
             }
-            # Añadir este post al arreglo
-            posts_with_comments.append(post_data)
-        elif message_value.get('type') == 'comment':
-            post_id = message_value.get('post_id')
-            # Buscar el post correspondiente para añadir el comentario
-            for post in posts_with_comments:
-                if post['post_id'] == post_id:
-                    post['comments'].append({
-                        'comment_id': message_value['comment_id'],
-                        'comment_body': message_value['comment_body'],
-                        'comment_author': message_value['comment_author'],
-                        'created': message_value['created']
-                    })
+            # Añadir este post al arreglo si no existe
+            if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
+                posts_with_comments.append(post_data)
 
 except KeyboardInterrupt:
     print("Proceso interrumpido. Guardando datos...")
@@ -87,5 +80,30 @@ finally:
     with open(f'data/reddit_data_{rango_horas}.json', 'w') as json_file:
         json.dump(posts_with_comments, json_file, indent=4)
 
-    consumer.close()
+    # Sobreescribir o agregar al archivo 'reddit.json' para mantener un registro continuo
+    reddit_json_path = 'data/reddit.json'
+
+    # Leer los datos existentes de 'reddit.json' si el archivo ya existe
+    if os.path.exists(reddit_json_path) and os.path.getsize(reddit_json_path) > 0:
+        try:
+            with open(reddit_json_path, 'r') as reddit_file:
+                existing_data = json.load(reddit_file)
+        except json.JSONDecodeError:
+            print("Error al decodificar el archivo reddit.json. Inicializando datos como lista vacía.")
+            existing_data = []
+    else:
+        existing_data = []
+
+    # Añadir los nuevos datos al archivo existente
+    for new_post in posts_with_comments:
+        if not any(post['post_id'] == new_post['post_id'] for post in existing_data):
+            existing_data.append(new_post)
+
+    # Guardar todos los datos nuevamente en 'reddit.json'
+    with open(reddit_json_path, 'w') as reddit_file:
+        json.dump(existing_data, reddit_file, indent=4)
+
     print(f"Datos guardados en data/reddit_data_{rango_horas}.json")
+    print(f"Datos acumulados guardados en data/reddit.json")
+
+    consumer.close()
