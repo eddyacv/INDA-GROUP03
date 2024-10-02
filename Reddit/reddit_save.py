@@ -60,7 +60,7 @@ try:
                 'num_comments': message_value.get('num_comments', 0),
                 'upvotes': message_value.get('upvotes', 0),
                 'tendencia': message_value.get('tendencia', 'null'),
-                'fecha_consulta': message_value.get('fecha_consulta', 'N/A'),
+                'fecha_consulta': message_value.get('fecha_consulta', 'N/A')
             }
             # Añadir este post al arreglo si no existe
             if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
@@ -96,12 +96,8 @@ finally:
 
     # Añadir los nuevos datos al archivo existente
     for new_post in posts_with_comments:
-        # Verificar que new_post tenga 'post_id'
-        if 'post_id' in new_post:
-            if not any(post.get('post_id') == new_post['post_id'] for post in existing_data):
-                existing_data.append(new_post)
-        else:
-            print(f"Advertencia: El nuevo post no tiene 'post_id': {new_post}")
+        if not any(post['post_id'] == new_post['post_id'] for post in existing_data):
+            existing_data.append(new_post)
 
     # Guardar todos los datos nuevamente en 'reddit.json'
     with open(reddit_json_path, 'w') as reddit_file:
