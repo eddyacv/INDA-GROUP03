@@ -49,18 +49,29 @@ try:
         # Clasificar entre post y comentarios
         if message_value.get('post_id'):
             post_id = message_value.get('post_id')
-            # Crear un diccionario con la estructura del post y comentarios vacíos
+            
+            # Crear un diccionario con todos los campos del post
             post_data = {
                 'post_id': post_id,
                 'title': message_value.get('title', 'N/A'),
                 'author': message_value.get('author', 'N/A'),
                 'created': message_value.get('created', 0),
-                'subreddit': message_value.get('subreddit', 'N/A'),
-                'url': message_value.get('url', 'N/A'),
                 'num_comments': message_value.get('num_comments', 0),
                 'upvotes': message_value.get('upvotes', 0),
-                'tendencia': message_value.get('tendencia', 'null'),
-                'fecha_consulta': message_value.get('fecha_consulta', 'N/A')
+                'upvote_ratio': message_value.get('upvote_ratio', 0),  # Ratio de upvotes a downvotes
+                'url': message_value.get('url', 'N/A'),
+                'permalink': message_value.get('permalink', 'N/A'),  # Enlace relativo dentro de Reddit
+                'selftext': message_value.get('selftext', ''),  # Texto del post
+                'subreddit': message_value.get('subreddit', 'N/A'),
+                'subreddit_subscribers': message_value.get('subreddit_subscribers', 0),  # Suscriptores del subreddit
+                'over_18': message_value.get('over_18', False),  # Si es NSFW
+                'is_video': message_value.get('is_video', False),  # Si contiene un video
+                'media': message_value.get('media', None),  # Información de medios (si tiene)
+                'stickied': message_value.get('stickied', False),  # Si está "pegado" en la parte superior del subreddit
+                'num_crossposts': message_value.get('num_crossposts', 0),  # Número de crossposts
+                'tendencia': message_value.get('tendencia', 'N/A'),  # Palabra clave que coincidió
+                'fecha_hora': message_value.get('fecha_hora', 'N/A'),  # Fecha y hora de la consulta
+                'fehca_actualizacion': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             }
             # Añadir este post al arreglo si no existe
             if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
