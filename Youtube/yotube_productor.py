@@ -18,14 +18,16 @@ youtube = build('youtube', 'v3', developerKey=api_key)
 # Configuración de Kafka Producer, con el servidor de Kafka que está en 'localhost'
 producer = Producer({'bootstrap.servers': 'localhost:9092'})
 
-# Función para buscar videos relacionados con una palabra clave
-def buscar_videos_palabra_clave(palabra_clave, max_results=25):
+# Función para buscar videos recientes o populares relacionados con una palabra clave
+# Se consultan los primeros 25 resultados o el valor definido en max_results
+def buscar_videos_palabra_clave(palabra_clave, tipo_busqueda='recientes', max_results=25):
+    order = 'date' if tipo_busqueda == 'recientes' else 'viewCount'  # Para "populares" ordenar por vistas
     request = youtube.search().list(
         q=palabra_clave,          # Palabra clave de búsqueda
         part="snippet",           # Incluir los detalles del video (título, canal, fecha)
         type="video",             # Filtrar por tipo de contenido (videos)
         maxResults=max_results,   # Número máximo de resultados a obtener
-        order="date"              # Ordenar por fecha de publicación (más recientes primero)
+        order=order               # Ordenar por fecha o por cantidad de vistas (dependiendo de tipo_busqueda)
     )
     response = request.execute()
     videos = []
@@ -35,12 +37,13 @@ def buscar_videos_palabra_clave(palabra_clave, max_results=25):
             'title': item['snippet']['title'],           # Título del video
             'channel': item['snippet']['channelTitle'],  # Canal del video
             'publishedAt': item['snippet']['publishedAt'], # Fecha de publicación
-            'palabra_clave': palabra_clave               # Incluir la palabra clave utilizada en la búsqueda
+            'palabra_clave': palabra_clave,               # Incluir la palabra clave utilizada en la búsqueda
+            'tipo_busqueda': tipo_busqueda                # Indicar si es 'recientes' o 'populares'
         })
     return videos
 
 # Función para obtener estadísticas de un video en YouTube a partir de su ID
-def obtener_datos_video(video_id, palabra_clave):
+def obtener_datos_video(video_id, palabra_clave, tipo_busqueda):
     request_stats = youtube.videos().list(
         part="snippet,statistics",  # Incluir tanto los detalles como las estadísticas
         id=video_id                 # Especificar el ID del video
@@ -58,7 +61,8 @@ def obtener_datos_video(video_id, palabra_clave):
         'commentCount': int(video_data['statistics'].get('commentCount', 0)),  # Cantidad de comentarios
         'url': f"https://www.youtube.com/watch?v={video_id}",  # URL del video
         'fecha_consulta': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Fecha y hora de consulta actual
-        'palabra_clave': palabra_clave  # Palabra clave utilizada para buscar el video 
+        'palabra_clave': palabra_clave,  # Palabra clave utilizada para buscar el video 
+        'tipo_busqueda': tipo_busqueda   # Indicar si es un video reciente o popular
     }
 
     return video_info
@@ -69,7 +73,7 @@ def enviar_a_kafka(topic, mensaje):
     producer.flush()
 
 # Función principal para ejecutar el proceso de extracción de videos
-def ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minutos=5):
+def ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minutos=5):
     tiempo_total = duracion_horas * 3600  # Convertir horas a segundos
     intervalo_segundos = intervalo_minutos * 60  # Convertir minutos a segundos
 
@@ -83,25 +87,31 @@ def ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minut
 
     while (time.time() - tiempo_inicial) < tiempo_total:
         iteracion += 1
-        # Guardar la fecha y hora de actualización
         fecha_actualizacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # Buscar los videos relacionados con la palabra clave ingresada
-        videos = buscar_videos_palabra_clave(palabra_clave)
+        # Recorrer todas las palabras clave proporcionadas
+        for palabra_clave in palabras_clave:
+            print(f"Consultando videos recientes para la palabra clave: {palabra_clave}")
+            videos_recientes = buscar_videos_palabra_clave(palabra_clave, tipo_busqueda='recientes')
 
-        for video in videos:
-            datos_video = obtener_datos_video(video['video_id'], palabra_clave)
-            if datos_video:
-                # Añadir el timestamp, palabra clave, fecha de inicio, de actualización y número de consulta
-                datos_video['timestamp'] = fecha_actualizacion
-                datos_video['iteracion'] = iteracion
-                datos_video['fecha_inicio'] = fecha_inicio
-                datos_video['fecha_actualizacion'] = fecha_actualizacion
-                datos_video['consulta_numero'] = consulta_numero  # Añadir el número de consulta
+            print(f"Consultando videos populares para la palabra clave: {palabra_clave}")
+            videos_populares = buscar_videos_palabra_clave(palabra_clave, tipo_busqueda='populares')
 
-                # Enviar los datos a Kafka
-                enviar_a_kafka('youtube-videos', datos_video)
-                print(f"Video enviado: {datos_video['title']} | Iteración: {iteracion} | Consulta: {consulta_numero} | Fecha Actualización: {fecha_actualizacion}")
+            # Combinar videos recientes y populares
+            todos_los_videos = videos_recientes + videos_populares
+
+            for video in todos_los_videos:
+                datos_video = obtener_datos_video(video['video_id'], palabra_clave, video['tipo_busqueda'])
+                if datos_video:
+                    datos_video['timestamp'] = fecha_actualizacion
+                    datos_video['iteracion'] = iteracion
+                    datos_video['fecha_inicio'] = fecha_inicio
+                    datos_video['fecha_actualizacion'] = fecha_actualizacion
+                    datos_video['consulta_numero'] = consulta_numero  # Añadir el número de consulta
+
+                    # Enviar los datos a Kafka
+                    enviar_a_kafka('youtube-videos', datos_video)
+                    print(f"Video enviado: {datos_video['title']} | Tipo: {datos_video['tipo_busqueda']} | Iteración: {iteracion} | Consulta: {consulta_numero} | Fecha Actualización: {fecha_actualizacion}")
 
         consulta_numero += 1  # Incrementar el número de consulta después de cada iteración
         time.sleep(intervalo_segundos)
@@ -109,15 +119,16 @@ def ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minut
     # Enviar mensaje de finalización a Kafka
     mensaje_finalizacion = {
         "status": "finalizado",
-        "mensaje": f"Se han enviado todos los videos durante el período para '{palabra_clave}'",
+        "mensaje": f"Se han enviado todos los videos durante el período",
         "fecha_inicio": fecha_inicio,
         "fecha_finalizacion": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        "consulta_numero": consulta_numero - 1  # Último número de consulta realizada
+        "consulta_numero": consulta_numero - 1
     }
     enviar_a_kafka('youtube-videos', mensaje_finalizacion)
     print("Todos los videos han sido enviados. Mensaje de finalización enviado.")
 
 # Ejecutar el productor
 if __name__ == "__main__":
-    palabra_clave = input("Introduce la palabra clave para buscar videos (ej. BigData): ")
-    ejecutar_extraccion_youtube(palabra_clave, duracion_horas=1, intervalo_minutos=5)
+    palabras_clave = input("Introduce las palabras clave para buscar videos (separadas por comas): ").split(',')
+    palabras_clave = [palabra.strip() for palabra in palabras_clave if palabra.strip() != '']  # Limpiar las palabras clave
+    ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minutos=5)
