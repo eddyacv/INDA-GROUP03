@@ -61,7 +61,8 @@ def obtener_datos_video(video_id):
         'viewCount': int(video_data['statistics'].get('viewCount', 0)),
         'likeCount': int(video_data['statistics'].get('likeCount', 0)),
         'dislikeCount': int(video_data['statistics'].get('dislikeCount', 0)) if 'dislikeCount' in video_data['statistics'] else None,
-        'commentCount': int(video_data['statistics'].get('commentCount', 0))
+        'commentCount': int(video_data['statistics'].get('commentCount', 0)),
+        'fecha_consulta': datetime.now().isoformat()
     }
 
     # Obtener los comentarios del video

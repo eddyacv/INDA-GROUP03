@@ -49,16 +49,26 @@ def obtener_ultimos_posts(subreddit_name, max_posts=5):
             palabra_clave_encontrada = contiene_palabra_clave(submission.title)
             if palabra_clave_encontrada:
                 post_data = {
-                    'post_id': submission.id,
-                    'title': submission.title,
-                    'author': str(submission.author),
-                    'created': submission.created_utc,
-                    'num_comments': submission.num_comments,
-                    'upvotes': submission.score,
-                    'url': submission.url,
-                    'subreddit': str(submission.subreddit),
-                    'tendencia': palabra_clave_encontrada  # Palabra clave que coincidió
-                }
+            'post_id': submission.id,
+            'title': submission.title,
+            'author': str(submission.author),
+            'created': submission.created_utc,
+            'num_comments': submission.num_comments,
+            'upvotes': submission.score,
+            'upvote_ratio': submission.upvote_ratio,  # Ratio de upvotes a downvotes
+            'url': submission.url,
+            'permalink': submission.permalink,  # Enlace relativo dentro de Reddit
+            'selftext': submission.selftext,  # Texto del post
+            'subreddit': str(submission.subreddit),
+            'subreddit_subscribers': submission.subreddit_subscribers,  # Suscriptores del subreddit
+            'over_18': submission.over_18,  # Si es NSFW
+            'is_video': submission.is_video,  # Si contiene un video
+            'media': submission.media,  # Información de medios (si tiene)
+            'stickied': submission.stickied,  # Si está "pegado" en la parte superior del subreddit
+            'num_crossposts': submission.num_crossposts,  # Número de crossposts
+            'tendencia': palabra_clave_encontrada,  # Palabra clave que coincidió,
+            'fecha_consulta': datetime.now().isoformat()
+        }
                 posts_data.append(post_data)
                 send_to_kafka('reddit_data', post_data)  # Enviar a Kafka
                 print(f"Post enviado: {submission.title} (Palabra clave: {palabra_clave_encontrada})")

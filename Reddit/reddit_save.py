@@ -60,7 +60,7 @@ try:
                 'num_comments': message_value.get('num_comments', 0),
                 'upvotes': message_value.get('upvotes', 0),
                 'tendencia': message_value.get('tendencia', 'null'),
-                'comments': []
+                'fecha_consulta': message_value.get('fecha_consulta', 'N/A'),
             }
             # Añadir este post al arreglo si no existe
             if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
