@@ -14,7 +14,7 @@ conf = {'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS')}
 producer = Producer(conf)
 
 # Lista de palabras clave relacionadas con tecnologías
-palabras_clave_tecnologias = ['AI', 'machine learning', 'big data', 'cloud', 'blockchain', 'data science', 'python', 'javascript', 'devops']
+palabras_clave_tecnologias = ['AI', 'machine learning', 'big data', 'cloud', 'blockchain', 'data science', 'python']
 
 # Función para enviar los datos a Kafka
 def send_to_kafka(topic, data):
@@ -56,6 +56,8 @@ def obtener_ultimos_posts(subreddit_name, max_posts=5):
                     'num_comments': submission.num_comments,
                     'upvotes': submission.score,
                     'upvote_ratio': submission.upvote_ratio,  # Ratio de upvotes a downvotes
+                    'num_comments_inicial': submission.num_comments,  # Número de comentarios inicial
+                    'upvotes_inicial': submission.score,  # Número de upvotes inicial
                     'url': submission.url,
                     'permalink': submission.permalink,  # Enlace relativo dentro de Reddit
                     'selftext': submission.selftext,  # Texto del post

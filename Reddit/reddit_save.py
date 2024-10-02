@@ -72,6 +72,8 @@ try:
                 'tendencia': message_value.get('tendencia', 'N/A'),  # Palabra clave que coincidió
                 'fecha_hora': message_value.get('fecha_hora', 'N/A'),  # Fecha y hora de la consulta
                 'fehca_actualizacion': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'num_comments_inicial': message_value.get('num_comments', 0),  # Número de comentarios inicial
+                'upvotes_inicial': message_value.get('upvotes', 0),  # Número de upvotes inicial
             }
             # Añadir este post al arreglo si no existe
             if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
