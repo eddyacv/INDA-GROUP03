@@ -11,11 +11,14 @@ from datetime import datetime
 load_dotenv('youtube.env')
 
 # Obtener las claves API desde las variables de entorno (puedes agregar más claves aquí)
-api_keys = [os.getenv('YOUTUBE_API_KEY1'), os.getenv('YOUTUBE_API_KEY2'),os.getenv('YOUTUBE_API_KEY3')]
+api_keys = [os.getenv('YOUTUBE_API_KEY1'), os.getenv('YOUTUBE_API_KEY2'), os.getenv('YOUTUBE_API_KEY3')]
 
 # Inicializar la primera clave
 api_key_index = 0
 current_api_key = api_keys[api_key_index]
+
+# Diccionario para almacenar los valores iniciales de likes, vistas y comentarios
+valores_iniciales = {}
 
 # Función para cambiar la clave de API en caso de alcanzar el límite de solicitudes
 def cambiar_clave_api():
@@ -52,6 +55,7 @@ def buscar_videos_palabra_clave(palabra_clave, tipo_busqueda='recientes', max_re
             response = request.execute()
             videos = []
             for item in response['items']:
+
                 videos.append({
                     'video_id': item['id']['videoId'],
                     'title': item['snippet']['title'],
@@ -72,7 +76,8 @@ def buscar_videos_palabra_clave(palabra_clave, tipo_busqueda='recientes', max_re
 
 # Función para obtener estadísticas de un video en YouTube a partir de su ID
 def obtener_datos_video(video_id, palabra_clave, tipo_busqueda):
-    global youtube
+    global youtube, valores_iniciales
+
     while True:
         try:
             request_stats = youtube.videos().list(
@@ -85,14 +90,30 @@ def obtener_datos_video(video_id, palabra_clave, tipo_busqueda):
                 return None
 
             video_data = response_stats['items'][0]
+            viewCount = int(video_data['statistics'].get('viewCount', 0))
+            likeCount = int(video_data['statistics'].get('likeCount', 0))
+            commentCount = int(video_data['statistics'].get('commentCount', 0))
+
+            # Si es la primera vez que se captura este video, guarda los valores iniciales
+            if video_id not in valores_iniciales:
+                valores_iniciales[video_id] = {
+                    'viewCount_inicial': viewCount,
+                    'likeCount_inicial': likeCount,
+                    'commentCount_inicial': commentCount
+                }
+
+            # Obtener los valores iniciales
+            iniciales = valores_iniciales[video_id]
+
             video_info = {
                 'title': video_data['snippet']['title'],
-                'viewCount': int(video_data['statistics'].get('viewCount', 0)),
-                'likeCount': int(video_data['statistics'].get('likeCount', 0)),
-                'commentCount': int(video_data['statistics'].get('commentCount', 0)),
-                'viewCount_inicial': int(video_data['statistics'].get('viewCount', 0)),
-                'likeCount_inicial': int(video_data['statistics'].get('likeCount', 0)),
-                'commentCount_inicial': int(video_data['statistics'].get('commentCount', 0)),
+                'viewCount': viewCount,
+                'likeCount': likeCount,
+                'commentCount': commentCount,
+                # Restar los valores actuales de los iniciales
+                'viewCount_delta': viewCount - iniciales['viewCount_inicial'],
+                'likeCount_delta': likeCount - iniciales['likeCount_inicial'],
+                'commentCount_delta': commentCount - iniciales['commentCount_inicial'],
                 'url': f"https://www.youtube.com/watch?v={video_id}",
                 'fecha_consulta': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'palabra_clave': palabra_clave,
@@ -167,4 +188,4 @@ def ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minu
 if __name__ == "__main__":
     palabras_clave = input("Introduce las palabras clave para buscar videos (separadas por comas): ").split(',')
     palabras_clave = [palabra.strip() for palabra in palabras_clave if palabra.strip() != '']
-    ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minutos=5)
+    ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minutos=2)
