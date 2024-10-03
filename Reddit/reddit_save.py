@@ -3,6 +3,7 @@ import datetime
 import os
 from confluent_kafka import Consumer
 from dotenv import load_dotenv
+import time
 
 # Cargar las variables de entorno desde reddit.env
 load_dotenv('reddit.env')
@@ -10,113 +11,90 @@ load_dotenv('reddit.env')
 # Configuración del consumidor de Kafka
 conf = {
     'bootstrap.servers': 'localhost:9092',
-    'group.id': 'my_consumer_group',
+    'group.id': 'reddit-consumer-group',
     'auto.offset.reset': 'earliest'
 }
 
 consumer = Consumer(conf)
 consumer.subscribe(['reddit_data'])
 
-# Lista para almacenar todos los posts y sus comentarios
-posts_with_comments = []
-
-# Guardar la hora de inicio
-hora_inicio = datetime.datetime.now()
-
 # Crear la carpeta 'data' si no existe
 if not os.path.exists('data'):
     os.makedirs('data')
 
-# Leer mensajes del topic
-try:
-    while True:
-        msg = consumer.poll(1.0)
-        if msg is None:
-            continue
-        if msg.error():
-            print(f"Error: {msg.error()}")
-            continue
+# Guardar la hora de inicio
+hora_inicio = datetime.datetime.now()
 
-        # Procesar el mensaje
-        try:
-            message_value = json.loads(msg.value().decode('utf-8'))
-        except json.JSONDecodeError as e:
-            print(f"Error decodificando mensaje JSON: {e}")
-            continue
+# Función para consumir mensajes de Kafka y guardarlos en un archivo JSON periódicamente
+def consumir_y_guardar(duracion_horas=1, intervalo_minutos=5):
+    posts_recibidos = []  # Lista para almacenar todos los posts recibidos
 
-        print(f"Mensaje recibido: {message_value}")
+    tiempo_total = duracion_horas * 3600  # Convertir horas a segundos
+    intervalo_segundos = intervalo_minutos * 60  # Convertir minutos a segundos
 
-        # Clasificar entre post y comentarios
-        if message_value.get('post_id'):
-            post_id = message_value.get('post_id')
-            
-            # Crear un diccionario con todos los campos del post
-            post_data = {
-                'post_id': post_id,
-                'title': message_value.get('title', 'N/A'),
-                'author': message_value.get('author', 'N/A'),
-                'created': message_value.get('created', 0),
-                'num_comments': message_value.get('num_comments', 0),
-                'upvotes': message_value.get('upvotes', 0),
-                'upvote_ratio': message_value.get('upvote_ratio', 0),  # Ratio de upvotes a downvotes
-                'url': message_value.get('url', 'N/A'),
-                'permalink': message_value.get('permalink', 'N/A'),  # Enlace relativo dentro de Reddit
-                'selftext': message_value.get('selftext', ''),  # Texto del post
-                'subreddit': message_value.get('subreddit', 'N/A'),
-                'subreddit_subscribers': message_value.get('subreddit_subscribers', 0),  # Suscriptores del subreddit
-                'over_18': message_value.get('over_18', False),  # Si es NSFW
-                'is_video': message_value.get('is_video', False),  # Si contiene un video
-                'media': message_value.get('media', None),  # Información de medios (si tiene)
-                'stickied': message_value.get('stickied', False),  # Si está "pegado" en la parte superior del subreddit
-                'num_crossposts': message_value.get('num_crossposts', 0),  # Número de crossposts
-                'tendencia': message_value.get('tendencia', 'N/A'),  # Palabra clave que coincidió
-                'fecha_hora': message_value.get('fecha_hora', 'N/A'),  # Fecha y hora de la consulta
-                'fehca_actualizacion': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'num_comments_inicial': message_value.get('num_comments', 0),  # Número de comentarios inicial
-                'upvotes_inicial': message_value.get('upvotes', 0),  # Número de upvotes inicial
-            }
-            # Añadir este post al arreglo si no existe
-            if not any(post['post_id'] == post_data['post_id'] for post in posts_with_comments):
-                posts_with_comments.append(post_data)
+    tiempo_inicial = time.time()
+    try:
+        while (time.time() - tiempo_inicial) < tiempo_total:
+            print(f"Escuchando mensajes de Kafka... {datetime.datetime.now()}")
 
-except KeyboardInterrupt:
-    print("Proceso interrumpido. Guardando datos...")
+            while True:
+                msg = consumer.poll(1.0)  # Esperar por mensajes
 
-finally:
-    # Guardar la hora de finalización
-    hora_final = datetime.datetime.now()
+                if msg is None:
+                    continue
+                if msg.error():
+                    print(f"Error: {msg.error()}")
+                    break
 
-    # Formato: Mes-Día-Año_HoraInicio-HoraFinal
-    rango_horas = f'{hora_inicio.strftime("%m-%d-%Y_%H-%M")}-a-{hora_final.strftime("%H-%M")}'
+                # Procesar el mensaje
+                mensaje = json.loads(msg.value().decode('utf-8'))
 
-    # Guardar en la carpeta 'data' con la fecha y hora de inicio y finalización
-    with open(f'data/reddit_data_{rango_horas}.json', 'w') as json_file:
-        json.dump(posts_with_comments, json_file, indent=4)
+                # Agregar el post a la lista
+                posts_recibidos.append(mensaje)
+                print(f"Post recibido: {mensaje['title']}")
 
-    # Sobreescribir o agregar al archivo 'reddit.json' para mantener un registro continuo
-    reddit_json_path = 'data/reddit.json'
+            # Pausar por el intervalo definido antes de la próxima escucha
+            time.sleep(intervalo_segundos)
 
-    # Leer los datos existentes de 'reddit.json' si el archivo ya existe
-    if os.path.exists(reddit_json_path) and os.path.getsize(reddit_json_path) > 0:
-        try:
-            with open(reddit_json_path, 'r') as reddit_file:
-                existing_data = json.load(reddit_file)
-        except json.JSONDecodeError:
-            print("Error al decodificar el archivo reddit.json. Inicializando datos como lista vacía.")
+    except KeyboardInterrupt:
+        print("Proceso interrumpido manualmente. Guardando datos...")
+
+    finally:
+        # Guardar la hora de finalización
+        hora_final = datetime.datetime.now()
+
+        # Formato: Mes-Día-Año_HoraInicio-HoraFinal
+        rango_horas = f'{hora_inicio.strftime("%m-%d-%Y_%H-%M")}-a-{hora_final.strftime("%H-%M")}'
+
+        # Guardar los datos en un archivo JSON con la hora de consulta
+        with open(f'data/reddit_posts_{rango_horas}.json', 'w') as f:
+            json.dump(posts_recibidos, f, indent=4)
+
+        # Sobreescribir o agregar al archivo 'reddit.json' para mantener un registro continuo
+        reddit_json_path = 'data/reddit.json'
+        
+        # Leer los datos existentes de 'reddit.json' si el archivo ya existe
+        if os.path.exists(reddit_json_path) and os.path.getsize(reddit_json_path) > 0:
+            try:
+                with open(reddit_json_path, 'r') as reddit_file:
+                    existing_data = json.load(reddit_file)
+            except json.JSONDecodeError:
+                print("Error al decodificar el archivo reddit.json. Inicializando datos como lista vacía.")
+                existing_data = []
+        else:
             existing_data = []
-    else:
-        existing_data = []
 
-    # Añadir los nuevos datos al archivo existente
-    for new_post in posts_with_comments:
-        if not any(post['post_id'] == new_post['post_id'] for post in existing_data):
-            existing_data.append(new_post)
+        # Añadir los nuevos datos al archivo existente
+        existing_data.extend(posts_recibidos)
 
-    # Guardar todos los datos nuevamente en 'reddit.json'
-    with open(reddit_json_path, 'w') as reddit_file:
-        json.dump(existing_data, reddit_file, indent=4)
+        # Guardar todos los datos nuevamente en 'reddit.json'
+        with open(reddit_json_path, 'w') as reddit_file:
+            json.dump(existing_data, reddit_file, indent=4)
 
-    print(f"Datos guardados en data/reddit_data_{rango_horas}.json")
-    print(f"Datos acumulados guardados en data/reddit.json")
+        consumer.close()
+        print(f"Datos de posts guardados en data/reddit_posts_{rango_horas}.json")
+        print(f"Datos acumulados guardados en data/reddit.json")
 
-    consumer.close()
+# Ejecutar la función de consumo con escucha cada 5 minutos durante 1 hora
+if __name__ == "__main__":
+    consumir_y_guardar(duracion_horas=1, intervalo_minutos=5)

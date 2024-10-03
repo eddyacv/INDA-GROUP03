@@ -132,4 +132,4 @@ if __name__ == "__main__":
     subreddits = input("Introduce los subreddits separados por comas (máx 10): ").split(',')
     subreddits = [sub.strip() for sub in subreddits if sub.strip() != ''][:10]  # Limitar a 10 subreddits
 
-    ejecutar_extraccion_y_monitoreo(subreddits, intervalo_minutos=5, duracion_horas=1)
+    ejecutar_extraccion_y_monitoreo(subreddits, intervalo_minutos=10, duracion_horas=2)

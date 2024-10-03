@@ -11,7 +11,7 @@ from datetime import datetime
 load_dotenv('youtube.env')
 
 # Obtener las claves API desde las variables de entorno (puedes agregar más claves aquí)
-api_keys = [os.getenv('YOUTUBE_API_KEY1'), os.getenv('YOUTUBE_API_KEY2'), os.getenv('YOUTUBE_API_KEY3')]
+api_keys = [os.getenv('YOUTUBE_API_KEY1'), os.getenv('YOUTUBE_API_KEY2'), os.getenv('YOUTUBE_API_KEY3'), os.getenv('YOUTUBE_API_KEY4'), os.getenv('YOUTUBE_API_KEY5')]
 
 # Inicializar la primera clave
 api_key_index = 0
@@ -188,4 +188,4 @@ def ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minu
 if __name__ == "__main__":
     palabras_clave = input("Introduce las palabras clave para buscar videos (separadas por comas): ").split(',')
     palabras_clave = [palabra.strip() for palabra in palabras_clave if palabra.strip() != '']
-    ejecutar_extraccion_youtube(palabras_clave, duracion_horas=1, intervalo_minutos=2)
+    ejecutar_extraccion_youtube(palabras_clave, duracion_horas=2, intervalo_minutos=10)
